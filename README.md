@@ -11,7 +11,7 @@ Ants are small, often difficult to detect, and appear in large volumes of video 
 ## Project Structure
 
 The repository is organized into the following components:
-
+- How_to_create_a_Model.pdf
 - tiling.py
 - reduction_of_dataset.py
 - Preannotation_of_images.ipynb
@@ -67,6 +67,10 @@ The full pipeline consists of the following steps:
 ---
 
 ## Step-by-Step Explanation
+
+### 0. Step by Step Guide through the process (How_to_create_a_Model.pdf)
+Purpose: 
+Explains with personal drawings what you are doing and why you are doing it
 
 ### 1. Tile Extraction (tiling.py)
 
