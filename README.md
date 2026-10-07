@@ -200,7 +200,7 @@ What it includes:
 - Trajectory analysis tools  
 
 trex_batch_pipeline.sh:
-- Chunk handling: it runs trex on videos in batches (days or hour) with predefined settings (Trex_pipeline.settings)
+- Chunk handling: it runs trex on videos in batches (days or hour) with predefined settings (Trex_pipeline.settings) (default.settings--> updated version!)
 
 ---
 
