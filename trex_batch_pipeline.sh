@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEFAULT_VIDEOS_DIR="/Volumes/PUMBAAAUPA/Videosout"
-DEFAULT_SETTINGS="/Users/lenawunderlich/Library/Mobile Documents/com~apple~CloudDocs/Studium Shit/Master/Hiwi/Ant_Tracking/Trex_pipeline.settings"
+DEFAULT_VIDEOS_DIR="/media/angela/PUMBAAAUPA/Videosout/"
+DEFAULT_SETTINGS="/media/angela/PUMBAAAUPA/default.settings"
 DEFAULT_DATE="20251125"
 
 DATE="${1:-$DEFAULT_DATE}"
@@ -15,64 +15,81 @@ if [[ -n "$TARGET_HOUR" && ! "$TARGET_HOUR" =~ ^([01][0-9]|2[0-3])$ ]]; then
   exit 1
 fi
 
-if [[ -n "$TARGET_HOUR" ]]; then
-  echo "Process date=$DATE only hour=$TARGET_HOUR"
-else
-  echo "Process date=$DATE all hours"
-fi
+process_date() {
+  local current_date="$1"
+  local current_dir="$2"
+  local current_hour="${3:-}"
 
-echo "VIDEOS_DIR=$VIDEOS_DIR"
-echo "SETTINGS=$SETTINGS"
+  echo "VIDEOS_DIR=$current_dir"
+  echo "SETTINGS=$SETTINGS"
 
-# First, group MP4s into hourly folders.
-while IFS= read -r f; do
-  base=${f##*/}
-  rest=${base#*${DATE}-}
-  time_part=${rest%%-*}
-  file_hour=${time_part:0:2}
-  file_min=${time_part:2:2}
-
-  if [[ -z "$file_hour" || -z "$file_min" ]]; then
-    echo "skip unparseable filename: $base"
-    continue
+  if [[ -n "$current_hour" ]]; then
+    echo "Process date=$current_date only hour=$current_hour"
+  else
+    echo "Process date=$current_date all hours"
   fi
 
-  if [[ -n "$TARGET_HOUR" && "$file_hour" != "$TARGET_HOUR" ]]; then
-    continue
-  fi
+  while IFS= read -r f; do
+    base=${f##*/}
+    rest=${base#*${current_date}-}
+    time_part=${rest%%-*}
+    file_hour=${time_part:0:2}
+    file_min=${time_part:2:2}
 
-  # Group into hourly directories (e.g., 10:00-10:59 -> DATE-1000)
-  group_dir="${VIDEOS_DIR}/${DATE}-${file_hour}00"
-  mkdir -p "$group_dir"
-  mv "$f" "$group_dir/"
-done < <(find "$VIDEOS_DIR" -maxdepth 1 -type f -name "VTKA_AuPa_${DATE}-*.mp4" | sort)
-
-# Then run trex per folder to avoid output collisions.
-for group_dir in "$VIDEOS_DIR"/${DATE}-*; do
-  [ -d "$group_dir" ] || continue
-
-  if [[ -n "$TARGET_HOUR" ]]; then
-    group_name=$(basename "$group_dir")
-    if [[ "$group_name" != "${DATE}-${TARGET_HOUR}00" ]]; then
+    if [[ -z "$file_hour" || -z "$file_min" ]]; then
+      echo "skip unparseable filename: $base"
       continue
     fi
-  fi
 
-  clips=()
-  while IFS= read -r clip; do
-    clips+=("$clip")
-  done < <(find "$group_dir" -maxdepth 1 -type f -name "*.mp4" | sort)
-  [ ${#clips[@]} -gt 0 ] || { echo "skip empty folder $group_dir"; continue; }
+    if [[ -n "$current_hour" && "$file_hour" != "$current_hour" ]]; then
+      continue
+    fi
 
-  list="[\"${clips[0]}\""
-  for ((i=1; i<${#clips[@]}; i++)); do
-    list+=",\"${clips[$i]}\""
+    group_dir="${current_dir}/${current_date}-${file_hour}00"
+    mkdir -p "$group_dir"
+    mv "$f" "$group_dir/"
+  done < <(find "$current_dir" -maxdepth 1 -type f -name "VTKA_AuPa_${current_date}-*.mp4" | sort)
+
+  for group_dir in "$current_dir"/${current_date}-*; do
+    [ -d "$group_dir" ] || continue
+
+    if [[ -n "$current_hour" ]]; then
+      group_name=$(basename "$group_dir")
+      if [[ "$group_name" != "${current_date}-${current_hour}00" ]]; then
+        continue
+      fi
+    fi
+
+    clips=()
+    while IFS= read -r clip; do
+      clips+=("$clip")
+    done < <(find "$group_dir" -maxdepth 1 -type f -name "*.mp4" | sort)
+    [ ${#clips[@]} -gt 0 ] || { echo "skip empty folder $group_dir"; continue; }
+
+    list="[\"${clips[0]}\""
+    for ((i=1; i<${#clips[@]}; i++)); do
+      list+=",\"${clips[$i]}\""
+    done
+    list+="]"
+
+    echo "Running trex for folder $(basename "$group_dir") (${#clips[@]} clips)"
+    (
+      cd "$group_dir"
+      trex -i "$list" -s "$SETTINGS" -task convert -auto_quit
+    )
   done
-  list+="]"
+}
 
-  echo "Running trex for folder $(basename "$group_dir") (${#clips[@]} clips)"
-  (
-    cd "$group_dir"
-    trex -i "$list" -s "$SETTINGS" -auto_quit
-  )
-done
+if [[ "$DATE" == "all" ]]; then
+  shopt -s nullglob
+  for d in "$VIDEOS_DIR"/*; do
+    [[ -d "$d" ]] || continue
+    current_name=$(basename "$d")
+    if [[ "$current_name" =~ ^[0-9]{8}$ ]]; then
+      process_date "$current_name" "$d" "$TARGET_HOUR"
+    fi
+  done
+  exit 0
+fi
+
+process_date "$DATE" "$VIDEOS_DIR" "$TARGET_HOUR"
